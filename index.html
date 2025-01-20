@@ -30,6 +30,22 @@
                 </select>
             </div>
             <div class="setting-item">
+                <label>Ses Modeli:</label>
+                <select id="voiceModelSelect">
+                    <option value="basic">Temel Ses</option>
+                    <option value="elevenlabs">Gelişmiş Ses (ElevenLabs)</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <label>ElevenLabs Ses:</label>
+                <select id="elevenLabsVoiceSelect" disabled>
+                    <option value="ThT5KcBeYPX3keUQqHPh">Rachel - Doğal Ses</option>
+                    <option value="ErXwobaYiN019PkySvjV">Antoni - Derin Ses</option>
+                    <option value="EXAVITQu4vr4xnSDxMaL">Bella - Akıcı Ses</option>
+                    <option value="MF3mGyEYCl7XYWbV9V6O">Elli - Samimi Ses</option>
+                </select>
+            </div>
+            <div class="setting-item">
                 <button id="devopsButton" class="devops-button">
                     <i class="fas fa-code-branch"></i> DevOps
                 </button>

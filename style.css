@@ -413,4 +413,18 @@ body {
 .member-info p {
     margin: 0;
     color: rgba(255, 255, 255, 0.7);
+}
+
+.setting-item select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#elevenLabsVoiceSelect {
+    margin-top: 10px;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+#voiceModelSelect {
+    margin-bottom: 10px;
 } 

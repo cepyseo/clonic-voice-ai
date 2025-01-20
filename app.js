@@ -9,6 +9,9 @@ class VoiceAssistant {
         this.isListening = false;
         this.currentLanguage = 'tr-TR'; // Varsayılan dil
         this.setupSettingsUI();
+        this.voiceModel = 'basic';
+        this.elevenLabsVoice = 'ThT5KcBeYPX3keUQqHPh';
+        this.elevenLabsApiKey = 'sk_21df53a86a2d5900460e00aafd396c757f6de5e752d50958';
     }
 
     setupRecognition() {
@@ -66,58 +69,21 @@ class VoiceAssistant {
 
     async processCommand(text) {
         try {
-            // Dili algıla
-            this.currentLanguage = await this.detectLanguage(text);
-            
-            // AI API'sine istek at
             const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}`);
             const aiData = await aiResponse.json();
 
             if (aiData.success) {
-                // Emojileri temizle
                 const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
-                
-                // Dile göre ses seçimi
-                const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Wavenet-E' : 'en-US-Wavenet-D';
-                
-                // Ses API'sine istek at
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(cleanResponse)}&voice=${voice}&speed=1.1&pitch=1&volume=1.2`;
-                
-                // Ses yanıtını hazırla
-                const audio = new Audio(voiceUrl);
-                
-                // Yükleme durumunu göster
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Yanıt hazırlanıyor...' : 
-                    'Preparing response...';
-                
-                // Ses yüklendiğinde çal ve animasyonu başlat
-                audio.addEventListener('canplaythrough', () => {
-                    this.recordButton.classList.add('speaking');
-                    this.responseDiv.textContent = aiData.response;
-                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                        'Yanıt veriliyor...' : 
-                        'Responding...';
-                    audio.play();
-                });
 
-                // Ses bittiğinde
-                audio.onended = () => {
-                    this.recordButton.classList.remove('speaking');
-                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                        'Başlamak için mikrofona tıklayın' : 
-                        'Click microphone to start';
-                };
+                if (this.voiceModel === 'elevenlabs') {
+                    // ElevenLabs API kullan
+                    await this.playElevenLabsAudio(cleanResponse);
+                } else {
+                    // Mevcut ses API'sini kullan
+                    await this.playBasicAudio(cleanResponse);
+                }
 
-                // Hata durumunda
-                audio.onerror = () => {
-                    console.error('Ses yüklenirken hata oluştu');
-                    this.recordButton.classList.remove('speaking');
-                    this.responseDiv.textContent = cleanResponse;
-                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                        'Ses oynatılamadı' : 
-                        'Could not play audio';
-                };
+                this.responseDiv.textContent = aiData.response;
             }
         } catch (error) {
             console.error('Hata:', error);
@@ -125,6 +91,82 @@ class VoiceAssistant {
                 'Bir hata oluştu. Lütfen tekrar deneyin.' : 
                 'An error occurred. Please try again.';
         }
+    }
+
+    async playBasicAudio(text) {
+        const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Wavenet-E' : 'en-US-Wavenet-D';
+        const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&speed=1.1&pitch=1&volume=1.2`;
+        
+        const audio = new Audio(voiceUrl);
+        
+        this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+            'Yanıt hazırlanıyor...' : 
+            'Preparing response...';
+
+        await this.playAudio(audio);
+    }
+
+    async playElevenLabsAudio(text) {
+        try {
+            this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                'Gelişmiş ses hazırlanıyor...' : 
+                'Preparing enhanced voice...';
+
+            const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${this.elevenLabsVoice}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'audio/mpeg',
+                    'Content-Type': 'application/json',
+                    'xi-api-key': this.elevenLabsApiKey
+                },
+                body: JSON.stringify({
+                    text: text,
+                    model_id: 'eleven_multilingual_v2',
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75
+                    }
+                })
+            });
+
+            if (!response.ok) throw new Error('ElevenLabs API error');
+
+            const audioBlob = await response.blob();
+            const audio = new Audio(URL.createObjectURL(audioBlob));
+            
+            await this.playAudio(audio);
+
+        } catch (error) {
+            console.error('ElevenLabs Error:', error);
+            // Hata durumunda temel ses API'sine geri dön
+            await this.playBasicAudio(text);
+        }
+    }
+
+    async playAudio(audio) {
+        return new Promise((resolve, reject) => {
+            audio.addEventListener('canplaythrough', () => {
+                this.recordButton.classList.add('speaking');
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Yanıt veriliyor...' : 
+                    'Responding...';
+                audio.play();
+            });
+
+            audio.onended = () => {
+                this.recordButton.classList.remove('speaking');
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Başlamak için mikrofona tıklayın' : 
+                    'Click microphone to start';
+                resolve();
+            };
+
+            audio.onerror = (error) => {
+                console.error('Ses oynatma hatası:', error);
+                this.recordButton.classList.remove('speaking');
+                reject(error);
+            };
+        });
     }
 
     setupSettingsUI() {
@@ -135,6 +177,8 @@ class VoiceAssistant {
         const devopsModal = document.getElementById('devopsModal');
         const closeDevops = document.getElementById('closeDevops');
         const languageSelect = document.getElementById('languageSelect');
+        const voiceModelSelect = document.getElementById('voiceModelSelect');
+        const elevenLabsVoiceSelect = document.getElementById('elevenLabsVoiceSelect');
 
         // Ayarlar menüsü
         settingsButton.addEventListener('click', () => {
@@ -171,6 +215,15 @@ class VoiceAssistant {
             if (!settingsMenu.contains(e.target) && e.target !== settingsButton) {
                 settingsMenu.classList.remove('active');
             }
+        });
+
+        voiceModelSelect.addEventListener('change', (e) => {
+            this.voiceModel = e.target.value;
+            elevenLabsVoiceSelect.disabled = this.voiceModel !== 'elevenlabs';
+        });
+
+        elevenLabsVoiceSelect.addEventListener('change', (e) => {
+            this.elevenLabsVoice = e.target.value;
         });
     }
 
