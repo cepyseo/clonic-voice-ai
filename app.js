@@ -20,6 +20,9 @@ class VoiceAssistant {
         this.lastProcessedText = '';
         this.processingTimeout = null;
         this.initParticles();
+        this.confidenceThreshold = 0.7; // Konuşma algılama güven eşiği
+        this.lastTranscript = ''; // Son algılanan metin
+        this.transcriptBuffer = []; // Metin tamponu
     }
 
     initAudioContext() {
@@ -36,64 +39,61 @@ class VoiceAssistant {
     setupRecognition() {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.maxAlternatives = 1;
+        this.recognition.maxAlternatives = 3; // Alternatif sonuçları artır
         this.recognition.lang = this.currentLanguage;
 
         this.recognition.onstart = () => {
             this.isListening = true;
             this.recordButton.classList.add('listening');
-            this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                'Dinleniyor...' : 
-                'Listening...';
+            this.updateStatus('listening');
         };
 
         this.recognition.onresult = async (event) => {
             let interimTranscript = '';
             let finalTranscript = '';
 
-            // Sonuçları işle
+            // Sonuçları işle ve güven skorunu kontrol et
             for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
-                } else {
-                    interimTranscript += transcript;
+                const result = event.results[i];
+                const transcript = result[0].transcript;
+                const confidence = result[0].confidence;
+
+                if (confidence > this.confidenceThreshold) {
+                    if (result.isFinal) {
+                        finalTranscript += transcript;
+                        this.transcriptBuffer.push(transcript.trim());
+                    } else {
+                        interimTranscript += transcript;
+                    }
                 }
             }
 
             // Ara sonuçları göster
             if (interimTranscript !== '') {
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Söyleniyor: ' + interimTranscript :
-                    'Saying: ' + interimTranscript;
+                this.updateStatus('interim', interimTranscript);
             }
 
             // Final sonucu işle
-            if (finalTranscript !== '' && finalTranscript !== this.lastProcessedText) {
-                this.lastProcessedText = finalTranscript;
-                
-                // Önceki timeout'u temizle
-                if (this.processingTimeout) {
-                    clearTimeout(this.processingTimeout);
-                }
-
-                // Yeni bir timeout başlat
-                this.processingTimeout = setTimeout(async () => {
-                    await this.processCommand(finalTranscript);
-                }, 1000); // 1 saniye bekle
+            if (finalTranscript !== '') {
+                // Son 3 saniye içindeki metinleri birleştir
+                clearTimeout(this.processingTimeout);
+                this.processingTimeout = setTimeout(() => {
+                    const completeText = this.transcriptBuffer.join(' ');
+                    if (completeText !== this.lastTranscript) {
+                        this.lastTranscript = completeText;
+                        this.processCommand(completeText);
+                        this.transcriptBuffer = [];
+                    }
+                }, 1000);
             }
         };
 
         this.recognition.onerror = (event) => {
             console.error('Recognition error:', event.error);
             if (event.error === 'no-speech') {
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Ses algılanamadı, tekrar deneyin.' :
-                    'No speech detected, try again.';
+                this.updateStatus('error');
             } else {
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Hata oluştu: ' + event.error :
-                    'Error occurred: ' + event.error;
+                this.updateStatus('error');
             }
         };
 
@@ -103,9 +103,7 @@ class VoiceAssistant {
                 this.recognition.start();
             } else {
                 this.recordButton.classList.remove('listening');
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Başlamak için mikrofona tıklayın' :
-                    'Click microphone to start';
+                this.updateStatus();
             }
         };
     }
@@ -119,9 +117,7 @@ class VoiceAssistant {
             this.isListening = false;
             this.recognition.stop();
             this.recordButton.classList.remove('listening');
-            this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                'Başlamak için mikrofona tıklayın' :
-                'Click microphone to start';
+            this.updateStatus();
         } else {
             this.isListening = true;
             this.recognition.start();
@@ -130,9 +126,18 @@ class VoiceAssistant {
     }
 
     async detectLanguage(text) {
-        // Basit dil algılama: Türkçe karakterler içeriyorsa Türkçe, değilse İngilizce
-        const turkishChars = /[çğıöşüÇĞİÖŞÜ]/;
-        return turkishChars.test(text) ? 'tr-TR' : 'en-US';
+        // Daha gelişmiş dil algılama
+        const turkishPattern = /[çğıöşüÇĞİÖŞÜ]/;
+        const englishPattern = /^[a-zA-Z\s.,!?]+$/;
+        
+        if (turkishPattern.test(text)) {
+            return 'tr-TR';
+        } else if (englishPattern.test(text)) {
+            return 'en-US';
+        }
+        
+        // Belirsiz durumlarda mevcut dili koru
+        return this.currentLanguage;
     }
 
     async processCommand(text) {
@@ -140,18 +145,21 @@ class VoiceAssistant {
         
         try {
             this.isProcessing = true;
-            
-            // Dili algıla
-            this.currentLanguage = await this.detectLanguage(text);
-            this.recognition.lang = this.currentLanguage;
+            this.updateStatus('processing');
 
-            const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}`);
+            // Dili algıla ve güncelle
+            const detectedLang = await this.detectLanguage(text);
+            if (detectedLang !== this.currentLanguage) {
+                this.currentLanguage = detectedLang;
+                this.recognition.lang = this.currentLanguage;
+            }
+
+            const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${this.currentLanguage}`);
             const aiData = await aiResponse.json();
 
             if (aiData.success) {
                 const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
 
-                // Yanıtı göster
                 this.responseDiv.textContent = aiData.response;
 
                 // Ses çalınırken dinlemeyi geçici olarak durdur
@@ -160,7 +168,7 @@ class VoiceAssistant {
                     this.recognition.stop();
                 }
 
-                // Sesi çal
+                // Dile göre sesi çal
                 if (this.voiceModel === 'elevenlabs') {
                     await this.playElevenLabsAudio(cleanResponse);
                 } else {
@@ -169,14 +177,14 @@ class VoiceAssistant {
 
                 // Dinlemeyi tekrar başlat
                 if (wasSpeaking) {
-                    this.recognition.start();
+                    setTimeout(() => {
+                        this.recognition.start();
+                    }, 500);
                 }
             }
         } catch (error) {
             console.error('Hata:', error);
-            this.responseDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                'Bir hata oluştu. Lütfen tekrar deneyin.' : 
-                'An error occurred. Please try again.';
+            this.updateStatus('error');
         } finally {
             this.isProcessing = false;
         }
@@ -188,18 +196,14 @@ class VoiceAssistant {
         
         const audio = new Audio(voiceUrl);
         
-        this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-            'Yanıt hazırlanıyor...' : 
-            'Preparing response...';
+        this.updateStatus('processing');
 
         await this.playAudio(audio);
     }
 
     async playElevenLabsAudio(text) {
         try {
-            this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                'Gelişmiş ses hazırlanıyor...' : 
-                'Preparing enhanced voice...';
+            this.updateStatus('processing');
 
             const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${this.elevenLabsVoice}`, {
                 method: 'POST',
@@ -284,9 +288,7 @@ class VoiceAssistant {
                     await this.connectAudioSource(audio);
                     
                     this.recordButton.classList.add('speaking');
-                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                        'Yanıt veriliyor...' : 
-                        'Responding...';
+                    this.updateStatus('processing');
                     
                     await audio.play();
                 } catch (error) {
@@ -299,9 +301,7 @@ class VoiceAssistant {
 
             audio.onended = () => {
                 this.recordButton.classList.remove('speaking');
-                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
-                    'Başlamak için mikrofona tıklayın' : 
-                    'Click microphone to start';
+                this.updateStatus();
                 resolve();
             };
 
@@ -397,6 +397,35 @@ class VoiceAssistant {
             particle.style.opacity = Math.random() * 0.5 + 0.2;
             particle.style.transform = `translate(${distance}px, ${distance}px)`;
         });
+    }
+
+    updateStatus(type, text = '') {
+        switch (type) {
+            case 'listening':
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Sizi dinliyorum...' : 
+                    'I\'m listening...';
+                break;
+            case 'interim':
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Algılanan: ' + text :
+                    'Detected: ' + text;
+                break;
+            case 'processing':
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'İşleniyor...' : 
+                    'Processing...';
+                break;
+            case 'error':
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Üzgünüm, sizi anlayamadım. Lütfen tekrar deneyin.' : 
+                    'Sorry, I didn\'t understand. Please try again.';
+                break;
+            default:
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Başlamak için mikrofona tıklayın' : 
+                    'Click microphone to start';
+        }
     }
 }
 
