@@ -7,17 +7,24 @@ class VoiceAssistant {
         this.setupRecognition();
         this.setupEventListeners();
         this.isListening = false;
+        this.currentLanguage = 'tr-TR'; // Varsayılan dil
     }
 
     setupRecognition() {
         this.recognition.continuous = false;
-        this.recognition.lang = 'tr-TR';
         this.recognition.interimResults = false;
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onresult = async (event) => {
             const text = event.results[0][0].transcript;
-            this.statusDiv.textContent = 'Söylediğiniz: ' + text;
+            // Dili algıla ve recognition'ı güncelle
+            this.currentLanguage = await this.detectLanguage(text);
+            this.recognition.lang = this.currentLanguage;
+            
+            this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                'Söylediğiniz: ' + text : 
+                'You said: ' + text;
+            
             await this.processCommand(text);
         };
 
@@ -50,35 +57,55 @@ class VoiceAssistant {
         this.isListening = !this.isListening;
     }
 
+    async detectLanguage(text) {
+        // Basit dil algılama: Türkçe karakterler içeriyorsa Türkçe, değilse İngilizce
+        const turkishChars = /[çğıöşüÇĞİÖŞÜ]/;
+        return turkishChars.test(text) ? 'tr-TR' : 'en-US';
+    }
+
     async processCommand(text) {
         try {
+            // Dili algıla
+            this.currentLanguage = await this.detectLanguage(text);
+            
             // AI API'sine istek at
             const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}`);
             const aiData = await aiResponse.json();
 
             if (aiData.success) {
-                // Emojileri temizle ve AI yanıtını hazırla
+                // Emojileri temizle
                 const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
                 
-                // Önce ses API'sine istek at
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(cleanResponse)}&voice=tr-TR-Wavenet-E&speed=1.1&pitch=1&volume=1.2`;
+                // Dile göre ses seçimi
+                const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Wavenet-E' : 'en-US-Wavenet-D';
+                
+                // Ses API'sine istek at
+                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(cleanResponse)}&voice=${voice}&speed=1.1&pitch=1&volume=1.2`;
                 
                 // Ses yanıtını hazırla
                 const audio = new Audio(voiceUrl);
                 
+                // Yükleme durumunu göster
+                this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                    'Yanıt hazırlanıyor...' : 
+                    'Preparing response...';
+                
                 // Ses yüklendiğinde çal ve animasyonu başlat
                 audio.addEventListener('canplaythrough', () => {
-                    // Animasyonu başlat
                     this.recordButton.classList.add('speaking');
-                    // Yanıtı göster (emojiler dahil orijinal yanıt)
                     this.responseDiv.textContent = aiData.response;
-                    // Sesi çal
+                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                        'Yanıt veriliyor...' : 
+                        'Responding...';
                     audio.play();
                 });
 
-                // Ses bittiğinde animasyonu durdur
+                // Ses bittiğinde
                 audio.onended = () => {
                     this.recordButton.classList.remove('speaking');
+                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                        'Başlamak için mikrofona tıklayın' : 
+                        'Click microphone to start';
                 };
 
                 // Hata durumunda
@@ -86,11 +113,16 @@ class VoiceAssistant {
                     console.error('Ses yüklenirken hata oluştu');
                     this.recordButton.classList.remove('speaking');
                     this.responseDiv.textContent = cleanResponse;
+                    this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                        'Ses oynatılamadı' : 
+                        'Could not play audio';
                 };
             }
         } catch (error) {
             console.error('Hata:', error);
-            this.responseDiv.textContent = 'Bir hata oluştu. Lütfen tekrar deneyin.';
+            this.responseDiv.textContent = this.currentLanguage === 'tr-TR' ? 
+                'Bir hata oluştu. Lütfen tekrar deneyin.' : 
+                'An error occurred. Please try again.';
         }
     }
 }
