@@ -8,6 +8,68 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
+    <!-- Ayarlar Butonu -->
+    <div class="settings-button" id="settingsButton">
+        <i class="fas fa-cog"></i>
+    </div>
+
+    <!-- Ayarlar Menüsü -->
+    <div class="settings-menu" id="settingsMenu">
+        <div class="settings-header">
+            <h3>Ayarlar</h3>
+            <button class="close-button" id="closeSettings">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="settings-content">
+            <div class="setting-item">
+                <label>Dil Seçimi:</label>
+                <select id="languageSelect">
+                    <option value="tr-TR">Türkçe</option>
+                    <option value="en-US">English</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <button id="devopsButton" class="devops-button">
+                    <i class="fas fa-code-branch"></i> DevOps
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DevOps Modal -->
+    <div class="modal" id="devopsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Clonic AI Ekibi</h3>
+                <button class="close-button" id="closeDevops">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="team-member">
+                    <div class="member-avatar">
+                        <i class="fas fa-user-tie"></i>
+                    </div>
+                    <div class="member-info">
+                        <h4>Tolga Öztürk</h4>
+                        <p>Clonic AI - CEO</p>
+                    </div>
+                </div>
+                <div class="team-member">
+                    <div class="member-avatar">
+                        <i class="fas fa-user-cog"></i>
+                    </div>
+                    <div class="member-info">
+                        <h4>Mert Sunucum</h4>
+                        <p>Clonic AI - I.T. Management</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ana İçerik -->
     <div class="container">
         <div class="voice-circle">
             <div class="pulse"></div>

@@ -8,6 +8,7 @@ class VoiceAssistant {
         this.setupEventListeners();
         this.isListening = false;
         this.currentLanguage = 'tr-TR'; // Varsayılan dil
+        this.setupSettingsUI();
     }
 
     setupRecognition() {
@@ -123,6 +124,64 @@ class VoiceAssistant {
             this.responseDiv.textContent = this.currentLanguage === 'tr-TR' ? 
                 'Bir hata oluştu. Lütfen tekrar deneyin.' : 
                 'An error occurred. Please try again.';
+        }
+    }
+
+    setupSettingsUI() {
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsMenu = document.getElementById('settingsMenu');
+        const closeSettings = document.getElementById('closeSettings');
+        const devopsButton = document.getElementById('devopsButton');
+        const devopsModal = document.getElementById('devopsModal');
+        const closeDevops = document.getElementById('closeDevops');
+        const languageSelect = document.getElementById('languageSelect');
+
+        // Ayarlar menüsü
+        settingsButton.addEventListener('click', () => {
+            settingsMenu.classList.toggle('active');
+        });
+
+        closeSettings.addEventListener('click', () => {
+            settingsMenu.classList.remove('active');
+        });
+
+        // Dil seçimi
+        languageSelect.addEventListener('change', (e) => {
+            this.currentLanguage = e.target.value;
+            this.recognition.lang = this.currentLanguage;
+            
+            // Arayüz dilini güncelle
+            this.updateUILanguage();
+        });
+
+        // DevOps modal
+        devopsButton.addEventListener('click', () => {
+            devopsModal.classList.add('active');
+        });
+
+        closeDevops.addEventListener('click', () => {
+            devopsModal.classList.remove('active');
+        });
+
+        // Dışarı tıklandığında modalları kapat
+        window.addEventListener('click', (e) => {
+            if (e.target === devopsModal) {
+                devopsModal.classList.remove('active');
+            }
+            if (!settingsMenu.contains(e.target) && e.target !== settingsButton) {
+                settingsMenu.classList.remove('active');
+            }
+        });
+    }
+
+    updateUILanguage() {
+        const statusDiv = document.getElementById('status');
+        if (this.currentLanguage === 'tr-TR') {
+            statusDiv.textContent = 'Başlamak için mikrofona tıklayın';
+            // Diğer Türkçe metinler
+        } else {
+            statusDiv.textContent = 'Click microphone to start';
+            // Diğer İngilizce metinler
         }
     }
 }
