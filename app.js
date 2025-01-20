@@ -60,11 +60,19 @@ class VoiceAssistant {
                 // AI yanıtını göster
                 this.responseDiv.textContent = aiData.response;
                 
-                // Ses API'sine istek at
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(aiData.response)}&voice=tr-TR-Wavenet-E`;
+                // Ses API'sine istek at - parametreleri güncelledik
+                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(aiData.response)}&voice=tr-TR-Wavenet-E&speed=1.2&pitch=1.1`;
+                
+                // Ses çalma sırasında animasyonu başlat
+                this.recordButton.classList.add('speaking');
                 
                 // Ses yanıtını çal
                 const audio = new Audio(voiceUrl);
+                
+                audio.onended = () => {
+                    this.recordButton.classList.remove('speaking');
+                };
+                
                 audio.play();
             }
         } catch (error) {

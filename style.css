@@ -17,6 +17,9 @@ body {
 
 .container {
     text-align: center;
+    padding: 20px;
+    max-width: 800px;
+    width: 100%;
 }
 
 .voice-circle {
@@ -47,6 +50,18 @@ body {
     }
 }
 
+@keyframes speak {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+@keyframes wave {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.2); opacity: 0.3; }
+    100% { transform: scale(1); opacity: 0.8; }
+}
+
 #recordButton {
     position: relative;
     width: 100%;
@@ -67,28 +82,51 @@ body {
     color: white;
 }
 
-#recordButton.listening {
-    background: #dc3545;
+#recordButton.speaking {
+    animation: speak 1s ease-in-out infinite;
+    background: #28a745;
 }
 
-#recordButton.listening + .pulse {
+#recordButton.speaking + .pulse {
     display: block;
+    animation: wave 1.5s infinite;
+    background-color: rgba(40, 167, 69, 0.2);
+}
+
+#recordButton.speaking i {
+    animation: speak 1s ease-in-out infinite;
 }
 
 .status {
     color: #fff;
     margin-bottom: 20px;
     font-size: 18px;
+    font-weight: 500;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
 }
 
 .response {
     color: #fff;
     max-width: 600px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 25px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    border-radius: 15px;
     min-height: 100px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+    line-height: 1.6;
+    transition: all 0.3s ease;
+}
+
+.response:not(:empty) {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .mic-icon {
@@ -96,4 +134,19 @@ body {
     width: 30px;
     height: 30px;
     background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>') no-repeat center;
+}
+
+#recordButton.listening {
+    background: #dc3545;
+    animation: pulse 1.5s infinite;
+}
+
+#recordButton.listening i {
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 } 
