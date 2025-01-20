@@ -7,26 +7,40 @@
 body {
     margin: 0;
     padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
-    background: #1a1a1a;
-    font-family: Arial, sans-serif;
+    background: linear-gradient(-45deg, #1a1a1a, #2d3436, #0f2027, #203a43);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    font-family: 'Poppins', sans-serif;
+    color: white;
+    overflow-x: hidden;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
 .container {
+    position: relative;
+    z-index: 1;
     text-align: center;
-    padding: 20px;
-    max-width: 800px;
-    width: 100%;
+    padding: 40px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .voice-circle {
     position: relative;
-    width: 150px;
-    height: 150px;
-    margin: 0 auto 20px;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 30px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -115,27 +129,25 @@ body {
 }
 
 #recordButton {
-    position: relative;
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    background: #007bff;
+    background: rgba(0, 123, 255, 0.8);
     border: none;
     cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 2;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 30px rgba(0, 123, 255, 0.3);
 }
 
 #recordButton:hover {
-    background: #0056b3;
-    transform: scale(1.05);
+    transform: scale(1.1);
+    box-shadow: 0 0 40px rgba(0, 123, 255, 0.5);
 }
 
 #recordButton i {
-    font-size: 30px;
+    font-size: 35px;
     color: white;
-    transition: all 0.3s ease;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 #recordButton.speaking {
@@ -179,6 +191,8 @@ body {
     opacity: 0;
     transform: scale(1);
     transition: all 0.3s ease;
+    border-width: 3px;
+    filter: drop-shadow(0 0 10px rgba(40,167,69,0.3));
 }
 
 .wave:nth-child(1) {
@@ -211,17 +225,15 @@ body {
 }
 
 .status {
-    color: #fff;
-    margin-bottom: 20px;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 500;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    transition: all 0.3s ease;
-    min-height: 24px;
-    padding: 5px 10px;
-    border-radius: 8px;
-    background: rgba(0,0,0,0.2);
+    margin: 20px 0;
+    padding: 15px 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
     backdrop-filter: blur(5px);
+    display: inline-block;
+    transition: all 0.3s ease;
 }
 
 .status.interim {
@@ -230,18 +242,17 @@ body {
 }
 
 .response {
-    color: #fff;
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 25px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    min-height: 100px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    backdrop-filter: blur(10px);
-    line-height: 1.6;
+    position: relative;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 30px;
+    border-radius: 20px;
+    margin-top: 30px;
+    min-height: 120px;
+    line-height: 1.8;
+    font-size: 18px;
     transition: all 0.3s ease;
-    animation: fadeIn 0.5s ease-in;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .mic-icon {
@@ -254,19 +265,20 @@ body {
 /* Ayarlar Butonu */
 .settings-button {
     position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
+    top: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 20px;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
+}
+
+.settings-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
 }
 
 .settings-button i {
@@ -275,30 +287,23 @@ body {
     transition: transform 0.3s ease;
 }
 
-.settings-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.settings-button:hover i {
-    transform: rotate(45deg);
-}
-
 /* Ayarlar Menüsü */
 .settings-menu {
     position: fixed;
     top: 80px;
     right: 20px;
     width: 300px;
-    background: rgba(30, 30, 30, 0.95);
+    background: rgba(20, 20, 20, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 15px;
     padding: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
     z-index: 999;
     display: none;
     transform: translateY(-10px);
     opacity: 0;
     transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .settings-menu.active {
@@ -389,7 +394,7 @@ body {
 }
 
 .modal-content {
-    background: rgba(30, 30, 30, 0.95);
+    background: rgba(25, 25, 25, 0.97);
     backdrop-filter: blur(10px);
     border-radius: 15px;
     padding: 30px;
@@ -399,6 +404,7 @@ body {
     transform: translateY(-20px);
     opacity: 0;
     transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal.active .modal-content {
@@ -407,20 +413,23 @@ body {
 }
 
 .team-member {
-    display: flex;
-    align-items: center;
+    transition: all 0.3s ease;
+    margin: 15px 0;
     padding: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.team-member:last-child {
-    border-bottom: none;
+.team-member:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .member-avatar {
-    width: 60px;
-    height: 60px;
-    background: rgba(255, 255, 255, 0.1);
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(45deg, #007bff, #00ff88);
+    box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -495,5 +504,57 @@ body {
     100% {
         transform: scale(1);
         opacity: 0.5;
+    }
+}
+
+/* Arka plan partikülleri */
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.particle {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    animation: float 20s infinite;
+}
+
+@keyframes float {
+    0% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-100px) translateX(100px); }
+    100% { transform: translateY(0) translateX(0); }
+}
+
+/* Responsive düzenlemeler */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+        margin: 20px;
+    }
+
+    .voice-circle {
+        width: 150px;
+        height: 150px;
+    }
+
+    #recordButton {
+        width: 80px;
+        height: 80px;
+    }
+
+    .status {
+        font-size: 16px;
+        padding: 10px 20px;
+    }
+
+    .response {
+        font-size: 16px;
+        padding: 20px;
     }
 } 

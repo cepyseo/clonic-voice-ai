@@ -19,6 +19,7 @@ class VoiceAssistant {
         this.initAudioContext();
         this.lastProcessedText = '';
         this.processingTimeout = null;
+        this.initParticles();
     }
 
     initAudioContext() {
@@ -379,6 +380,23 @@ class VoiceAssistant {
             statusDiv.textContent = 'Click microphone to start';
             // Diğer İngilizce metinler
         }
+    }
+
+    initParticles() {
+        const particles = document.querySelectorAll('.particle');
+        particles.forEach((particle, i) => {
+            const size = Math.random() * 5 + 3;
+            const speed = Math.random() * 40 + 20;
+            const distance = Math.random() * 200 + 100;
+            
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.top = `${Math.random() * 100}%`;
+            particle.style.animation = `float ${speed}s infinite`;
+            particle.style.opacity = Math.random() * 0.5 + 0.2;
+            particle.style.transform = `translate(${distance}px, ${distance}px)`;
+        });
     }
 }
 
