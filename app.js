@@ -57,23 +57,36 @@ class VoiceAssistant {
             const aiData = await aiResponse.json();
 
             if (aiData.success) {
-                // AI yanıtını göster
-                this.responseDiv.textContent = aiData.response;
+                // Emojileri temizle ve AI yanıtını hazırla
+                const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
                 
-                // Ses API'sine istek at - parametreleri güncelledik
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(aiData.response)}&voice=tr-TR-Wavenet-E&speed=1.2&pitch=1.1`;
+                // Önce ses API'sine istek at
+                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(cleanResponse)}&voice=tr-TR-Wavenet-E&speed=1.1&pitch=1&volume=1.2`;
                 
-                // Ses çalma sırasında animasyonu başlat
-                this.recordButton.classList.add('speaking');
-                
-                // Ses yanıtını çal
+                // Ses yanıtını hazırla
                 const audio = new Audio(voiceUrl);
                 
+                // Ses yüklendiğinde çal ve animasyonu başlat
+                audio.addEventListener('canplaythrough', () => {
+                    // Animasyonu başlat
+                    this.recordButton.classList.add('speaking');
+                    // Yanıtı göster (emojiler dahil orijinal yanıt)
+                    this.responseDiv.textContent = aiData.response;
+                    // Sesi çal
+                    audio.play();
+                });
+
+                // Ses bittiğinde animasyonu durdur
                 audio.onended = () => {
                     this.recordButton.classList.remove('speaking');
                 };
-                
-                audio.play();
+
+                // Hata durumunda
+                audio.onerror = () => {
+                    console.error('Ses yüklenirken hata oluştu');
+                    this.recordButton.classList.remove('speaking');
+                    this.responseDiv.textContent = cleanResponse;
+                };
             }
         } catch (error) {
             console.error('Hata:', error);
