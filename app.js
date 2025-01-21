@@ -20,9 +20,10 @@ class VoiceAssistant {
         this.lastProcessedText = '';
         this.processingTimeout = null;
         this.initParticles();
-        this.confidenceThreshold = 0.7; // Konuşma algılama güven eşiği
-        this.lastTranscript = ''; // Son algılanan metin
-        this.transcriptBuffer = []; // Metin tamponu
+        this.confidenceThreshold = 0.5; // Eşik değerini düşürdük
+        this.retryAttempts = 3; // Yeniden deneme sayısı
+        this.noiseThreshold = -50; // Gürültü eşiği (dB)
+        this.setupAdvancedRecognition();
     }
 
     initAudioContext() {
@@ -36,65 +37,115 @@ class VoiceAssistant {
         }
     }
 
-    setupRecognition() {
-        this.recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    setupAdvancedRecognition() {
+        // Gelişmiş ses algılama ayarları
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.maxAlternatives = 1;
+        this.recognition.maxAlternatives = 3; // Alternatif sonuçları artır
         this.recognition.lang = 'tr-TR';
 
-        // Performans için buffer
-        let recognitionBuffer = '';
-        let bufferTimeout;
+        // Ses algılama hassasiyetini artır
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new AudioContext();
+        
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                const microphone = this.audioCtx.createMediaStreamSource(stream);
+                const analyser = this.audioCtx.createAnalyser();
+                analyser.fftSize = 1024;
+                microphone.connect(analyser);
+                
+                const dataArray = new Float32Array(analyser.frequencyBinCount);
+                
+                const checkAudioLevel = () => {
+                    analyser.getFloatFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    
+                    if (average > this.noiseThreshold) {
+                        this.recognition.start();
+                    }
+                    
+                    requestAnimationFrame(checkAudioLevel);
+                };
+                
+                checkAudioLevel();
+            });
+    }
 
+    setupRecognition() {
         this.recognition.onresult = async (event) => {
-            clearTimeout(bufferTimeout);
-            
-            const result = event.results[event.results.length - 1];
-            const transcript = result[0].transcript;
+            let finalTranscript = '';
+            let interimTranscript = '';
+            let highestConfidence = 0;
 
-            if (result.isFinal) {
-                // Hemen işleme al
-                if (transcript.trim().length > 0) {
-                    await this.processCommand(transcript.trim());
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                const alternatives = Array.from(result).sort((a, b) => b.confidence - a.confidence);
+                
+                if (result.isFinal) {
+                    // En yüksek güvenilirliğe sahip sonucu al
+                    const bestResult = alternatives[0];
+                    if (bestResult.confidence > highestConfidence) {
+                        highestConfidence = bestResult.confidence;
+                        finalTranscript = bestResult.transcript;
+                    }
+                } else {
+                    // Ara sonuçları birleştir
+                    alternatives.forEach(alt => {
+                        if (alt.confidence > 0.4) { // Düşük güvenilirlik eşiği
+                            interimTranscript += alt.transcript + ' ';
+                        }
+                    });
                 }
-            } else {
-                // Ara sonuçları göster
-                this.updateStatus('interim', transcript);
-                
-                // Buffer'ı güncelle
-                recognitionBuffer = transcript;
-                
-                // Buffer'ı temizle
-                bufferTimeout = setTimeout(() => {
-                    recognitionBuffer = '';
-                }, 1000);
+            }
+
+            if (finalTranscript) {
+                try {
+                    await this.processCommand(finalTranscript.trim());
+                } catch (error) {
+                    console.error('İşleme hatası:', error);
+                    this.retryRecognition();
+                }
+            } else if (interimTranscript) {
+                this.updateStatus('interim', interimTranscript.trim());
             }
         };
 
         this.recognition.onerror = (event) => {
-            if (event.error === 'no-speech') {
-                // Sessizlik durumunda hemen yeniden başlat
-                if (this.isListening) {
-                    try {
-                        this.recognition.start();
-                    } catch (error) {
-                        console.error('Recognition yeniden başlatma hatası:', error);
-                    }
-                }
+            console.error('Recognition error:', event.error);
+            if (event.error === 'no-speech' || event.error === 'audio-capture') {
+                this.retryRecognition();
             }
         };
 
         this.recognition.onend = () => {
-            if (this.isListening && !this.isProcessing) {
-                // Hemen yeniden başlat
+            if (this.isListening) {
+                setTimeout(() => {
+                    try {
+                        this.recognition.start();
+                    } catch (error) {
+                        console.error('Yeniden başlatma hatası:', error);
+                        this.retryRecognition();
+                    }
+                }, 100);
+            }
+        };
+    }
+
+    retryRecognition() {
+        if (this.retryCount < this.retryAttempts) {
+            this.retryCount++;
+            setTimeout(() => {
                 try {
                     this.recognition.start();
                 } catch (error) {
-                    console.error('Recognition yeniden başlatma hatası:', error);
+                    console.error('Yeniden deneme hatası:', error);
                 }
-            }
-        };
+            }, 1000);
+        } else {
+            this.updateStatus('error');
+            this.retryCount = 0;
+        }
     }
 
     setupEventListeners() {
@@ -126,59 +177,41 @@ class VoiceAssistant {
     }
 
     async processCommand(text) {
-        if (this.isProcessing) return;
-        
+        if (!text || this.isProcessing) return;
+
         try {
             this.isProcessing = true;
             this.updateStatus('processing');
 
-            // Dil algılama optimizasyonu
-            const detectedLang = this.detectLanguage(text); // async kaldırıldı
-            this.currentLanguage = detectedLang;
-            this.recognition.lang = detectedLang;
+            // Metin ön işleme
+            text = text.toLowerCase().trim()
+                .replace(/[.,!?]/g, '')
+                .replace(/\s+/g, ' ');
 
-            // API isteğini optimize et
-            const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${detectedLang}`, {
+            // API isteği
+            const response = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${this.currentLanguage}`, {
                 method: 'GET',
                 headers: {
-                    'Accept-Language': detectedLang,
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
+                    'Accept-Language': this.currentLanguage,
+                    'Cache-Control': 'no-cache'
                 }
             });
 
-            const aiData = await aiResponse.json();
+            if (!response.ok) throw new Error('API yanıt vermedi');
 
-            if (aiData.success) {
-                // Yanıtı hemen göster
-                this.responseDiv.textContent = aiData.response;
-
-                // Ses yanıtını hazırla
-                const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
-
-                // Ses yanıtını paralel olarak başlat
-                const audioPromise = this.voiceModel === 'elevenlabs' ? 
-                    this.playElevenLabsAudio(cleanResponse) : 
-                    this.playBasicAudio(cleanResponse);
-
-                // Ses çalma işlemini arka planda yap
-                audioPromise.catch(error => {
-                    console.error('Ses çalma hatası:', error);
-                });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.responseDiv.textContent = data.response;
+                await this.playResponse(data.response);
+            } else {
+                throw new Error('API başarısız yanıt döndü');
             }
         } catch (error) {
-            console.error('Hata:', error);
-            this.updateStatus('error');
+            console.error('İşleme hatası:', error);
+            this.retryRecognition();
         } finally {
             this.isProcessing = false;
-            // Dinlemeyi hemen başlat
-            if (this.isListening) {
-                try {
-                    await this.recognition.start();
-                } catch (error) {
-                    console.error('Recognition yeniden başlatma hatası:', error);
-                }
-            }
         }
     }
 
