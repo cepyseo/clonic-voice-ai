@@ -43,48 +43,56 @@ class VoiceAssistant {
         this.recognition.maxAlternatives = 1;
         this.recognition.lang = 'tr-TR';
 
-        this.recognition.onstart = () => {
-            this.isListening = true;
-            this.recordButton.classList.add('listening');
-            this.updateStatus('listening');
-        };
+        // Performans için buffer
+        let recognitionBuffer = '';
+        let bufferTimeout;
 
         this.recognition.onresult = async (event) => {
-            let interimTranscript = '';
-            let finalTranscript = '';
+            clearTimeout(bufferTimeout);
+            
+            const result = event.results[event.results.length - 1];
+            const transcript = result[0].transcript;
 
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    finalTranscript += result[0].transcript;
-                    // Hemen işleme al
-                    if (finalTranscript.trim().length > 0) {
-                        await this.processCommand(finalTranscript.trim());
-                    }
-                } else {
-                    interimTranscript += result[0].transcript;
-                    this.updateStatus('interim', interimTranscript);
+            if (result.isFinal) {
+                // Hemen işleme al
+                if (transcript.trim().length > 0) {
+                    await this.processCommand(transcript.trim());
                 }
+            } else {
+                // Ara sonuçları göster
+                this.updateStatus('interim', transcript);
+                
+                // Buffer'ı güncelle
+                recognitionBuffer = transcript;
+                
+                // Buffer'ı temizle
+                bufferTimeout = setTimeout(() => {
+                    recognitionBuffer = '';
+                }, 1000);
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.error('Recognition error:', event.error);
             if (event.error === 'no-speech') {
-                this.updateStatus('error');
+                // Sessizlik durumunda hemen yeniden başlat
+                if (this.isListening) {
+                    try {
+                        this.recognition.start();
+                    } catch (error) {
+                        console.error('Recognition yeniden başlatma hatası:', error);
+                    }
+                }
             }
         };
 
         this.recognition.onend = () => {
             if (this.isListening && !this.isProcessing) {
+                // Hemen yeniden başlat
                 try {
                     this.recognition.start();
                 } catch (error) {
                     console.error('Recognition yeniden başlatma hatası:', error);
                 }
-            } else {
-                this.recordButton.classList.remove('listening');
-                this.updateStatus();
             }
         };
     }
@@ -106,24 +114,15 @@ class VoiceAssistant {
         }
     }
 
-    async detectLanguage(text) {
-        // Daha kapsamlı Türkçe algılama
-        const turkishPattern = /[çğıöşüÇĞİÖŞÜ]|bir|ve|bu|şu|ne|nasıl|merhaba|selam|evet|hayır/i;
-        const englishOnlyPattern = /^[a-zA-Z\s.,!?]+$/;
+    detectLanguage(text) {
+        // Hızlı dil algılama için regex cache
+        const turkishRegex = /[çğıöşüÇĞİÖŞÜ]|^(merhaba|selam|nasıl|naber|evet|hayır|tamam|ne|neden|nasıl|kim|nerede|ne zaman|hangi|kaç|kadar)/i;
         
-        // Önce Türkçe karakterler ve yaygın kelimeler kontrolü
-        if (turkishPattern.test(text)) {
+        if (turkishRegex.test(text)) {
             return 'tr-TR';
         }
         
-        // Sadece İngilizce karakterler varsa
-        if (englishOnlyPattern.test(text) && 
-            /\b(hello|hi|hey|what|how|why|when|is|are|the)\b/i.test(text)) {
-            return 'en-US';
-        }
-        
-        // Varsayılan olarak Türkçe kullan
-        return 'tr-TR';
+        return 'tr-TR'; // Varsayılan olarak Türkçe
     }
 
     async processCommand(text) {
@@ -133,77 +132,68 @@ class VoiceAssistant {
             this.isProcessing = true;
             this.updateStatus('processing');
 
-            // Dil algılama ve güncelleme
-            const detectedLang = await this.detectLanguage(text);
+            // Dil algılama optimizasyonu
+            const detectedLang = this.detectLanguage(text); // async kaldırıldı
             this.currentLanguage = detectedLang;
             this.recognition.lang = detectedLang;
 
-            // Geçici olarak dinlemeyi durdur
-            const wasListening = this.isListening;
-            if (wasListening) {
-                this.recognition.stop();
-            }
-
-            // API isteğini yap
+            // API isteğini optimize et
             const aiResponse = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${detectedLang}`, {
+                method: 'GET',
                 headers: {
-                    'Accept-Language': detectedLang
+                    'Accept-Language': detectedLang,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
                 }
             });
 
             const aiData = await aiResponse.json();
 
             if (aiData.success) {
-                const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
-
-                // Yanıtı göster
+                // Yanıtı hemen göster
                 this.responseDiv.textContent = aiData.response;
 
-                try {
-                    // Ses yanıtını çal
-                    if (this.voiceModel === 'elevenlabs') {
-                        await this.playElevenLabsAudio(cleanResponse);
-                    } else {
-                        await this.playBasicAudio(cleanResponse);
-                    }
-                } catch (error) {
-                    console.error('Ses çalma hatası:', error);
-                }
+                // Ses yanıtını hazırla
+                const cleanResponse = aiData.response.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F191}-\u{1F251}]|[\u{1F004}]|[\u{1F0CF}]/gu, '');
 
-                // Dinlemeyi tekrar başlat
-                if (wasListening) {
-                    try {
-                        await this.recognition.start();
-                        this.isListening = true;
-                    } catch (error) {
-                        console.error('Recognition yeniden başlatma hatası:', error);
-                    }
-                }
+                // Ses yanıtını paralel olarak başlat
+                const audioPromise = this.voiceModel === 'elevenlabs' ? 
+                    this.playElevenLabsAudio(cleanResponse) : 
+                    this.playBasicAudio(cleanResponse);
+
+                // Ses çalma işlemini arka planda yap
+                audioPromise.catch(error => {
+                    console.error('Ses çalma hatası:', error);
+                });
             }
         } catch (error) {
             console.error('Hata:', error);
             this.updateStatus('error');
         } finally {
             this.isProcessing = false;
+            // Dinlemeyi hemen başlat
+            if (this.isListening) {
+                try {
+                    await this.recognition.start();
+                } catch (error) {
+                    console.error('Recognition yeniden başlatma hatası:', error);
+                }
+            }
         }
     }
 
     async playBasicAudio(text) {
         return new Promise(async (resolve, reject) => {
             try {
-                const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Wavenet-E' : 'en-US-Wavenet-D';
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&speed=1.1&pitch=1&volume=1.2&lang=${this.currentLanguage}`;
+                const voice = 'tr-TR-Wavenet-E'; // Sabit Türkçe ses
+                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&speed=1.2&pitch=1&volume=1.2&lang=tr-TR`;
                 
                 const audio = new Audio(voiceUrl);
                 
-                audio.oncanplaythrough = async () => {
-                    try {
-                        this.recordButton.classList.add('speaking');
-                        await audio.play();
-                    } catch (error) {
-                        console.error('Ses çalma hatası:', error);
-                        reject(error);
-                    }
+                // Ses yüklenirken beklemeden devam et
+                audio.oncanplaythrough = () => {
+                    this.recordButton.classList.add('speaking');
+                    audio.play().catch(reject);
                 };
 
                 audio.onended = () => {
@@ -211,12 +201,8 @@ class VoiceAssistant {
                     resolve();
                 };
 
-                audio.onerror = (error) => {
-                    console.error('Ses yükleme hatası:', error);
-                    reject(error);
-                };
+                audio.onerror = reject;
             } catch (error) {
-                console.error('Ses hazırlama hatası:', error);
                 reject(error);
             }
         });
