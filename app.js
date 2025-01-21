@@ -20,9 +20,13 @@ class VoiceAssistant {
         this.lastProcessedText = '';
         this.processingTimeout = null;
         this.initParticles();
-        this.confidenceThreshold = 0.5; // Eşik değerini düşürdük
+        this.confidenceThreshold = 0.3; // Eşik değerini daha da düşürdük
         this.retryAttempts = 3; // Yeniden deneme sayısı
-        this.noiseThreshold = -50; // Gürültü eşiği (dB)
+        this.noiseThreshold = -65; // Gürültü eşiğini düşürdük
+        this.bufferSize = 4096; // Buffer boyutunu artırdık
+        this.minDecibels = -90;
+        this.maxDecibels = -10;
+        this.smoothingTimeConstant = 0.85;
         this.setupAdvancedRecognition();
     }
 
@@ -38,71 +42,86 @@ class VoiceAssistant {
     }
 
     setupAdvancedRecognition() {
-        // Gelişmiş ses algılama ayarları
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.maxAlternatives = 5; // Daha fazla alternatif
+        this.recognition.maxAlternatives = 10; // Alternatif sayısını artırdık
         this.recognition.lang = 'tr-TR';
-        
-        // Ses hassasiyeti ayarları
+
+        // Gelişmiş ses ayarları
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.audioCtx = new AudioContext({
             latencyHint: 'interactive',
             sampleRate: 48000
         });
-        
-        navigator.mediaDevices.getUserMedia({ 
+
+        navigator.mediaDevices.getUserMedia({
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true,
                 channelCount: 1,
-                sampleRate: 48000
-            } 
+                sampleRate: 48000,
+                latency: 0,
+                volume: 1.0,
+                deviceId: undefined // Varsayılan mikrofon
+            }
         }).then(stream => {
             const microphone = this.audioCtx.createMediaStreamSource(stream);
             const analyser = this.audioCtx.createAnalyser();
             const gainNode = this.audioCtx.createGain();
+            const scriptProcessor = this.audioCtx.createScriptProcessor(this.bufferSize, 1, 1);
             
-            analyser.fftSize = 2048; // Daha yüksek hassasiyet
-            analyser.smoothingTimeConstant = 0.5;
-            
+            analyser.minDecibels = this.minDecibels;
+            analyser.maxDecibels = this.maxDecibels;
+            analyser.smoothingTimeConstant = this.smoothingTimeConstant;
+            analyser.fftSize = 2048;
+
             microphone.connect(gainNode);
             gainNode.connect(analyser);
-            gainNode.gain.value = 1.5; // Mikrofon hassasiyetini artır
-            
+            gainNode.connect(scriptProcessor);
+            scriptProcessor.connect(this.audioCtx.destination);
+            gainNode.gain.value = 2.0; // Mikrofon hassasiyetini daha da artırdık
+
             const dataArray = new Float32Array(analyser.frequencyBinCount);
             let silenceTimer = null;
-            
-            const checkAudioLevel = () => {
+            let voiceDetected = false;
+
+            scriptProcessor.onaudioprocess = (e) => {
                 analyser.getFloatFrequencyData(dataArray);
                 const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                const inputBuffer = e.inputBuffer.getChannelData(0);
+                const outputBuffer = e.outputBuffer.getChannelData(0);
                 
-                if (average > this.noiseThreshold) {
-                    if (!this.isListening && !this.isProcessing) {
-                        clearTimeout(silenceTimer);
-                        this.startListening();
-                    }
-                } else {
-                    if (this.isListening) {
-                        clearTimeout(silenceTimer);
-                        silenceTimer = setTimeout(() => {
-                            this.processCurrentTranscript();
-                        }, 1000);
-                    }
+                // Ses sinyali işleme
+                let sum = 0;
+                for (let i = 0; i < inputBuffer.length; i++) {
+                    sum += Math.abs(inputBuffer[i]);
+                    outputBuffer[i] = inputBuffer[i];
                 }
                 
-                requestAnimationFrame(checkAudioLevel);
+                const rms = Math.sqrt(sum / inputBuffer.length);
+                if (rms > 0.01 || average > this.noiseThreshold) {
+                    if (!voiceDetected) {
+                        voiceDetected = true;
+                        this.startListening();
+                    }
+                    clearTimeout(silenceTimer);
+                } else if (voiceDetected) {
+                    clearTimeout(silenceTimer);
+                    silenceTimer = setTimeout(() => {
+                        voiceDetected = false;
+                        this.processCurrentTranscript();
+                    }, 700); // Sessizlik süresini azalttık
+                }
             };
-            
-            checkAudioLevel();
         });
     }
 
     setupRecognition() {
         let transcriptBuffer = '';
         let lastProcessTime = Date.now();
-        
+        let consecutiveErrors = 0;
+
         this.recognition.onresult = async (event) => {
             let finalTranscript = '';
             let interimTranscript = '';
@@ -113,36 +132,34 @@ class VoiceAssistant {
                 
                 if (result.isFinal) {
                     const bestResult = alternatives[0];
-                    if (bestResult.confidence > 0.7) { // Yüksek güvenilirlik eşiği
+                    if (bestResult.confidence > 0.4) { // Güvenilirlik eşiğini düşürdük
                         finalTranscript = bestResult.transcript;
+                        consecutiveErrors = 0; // Başarılı algılama durumunda sıfırla
                         await this.processCommand(finalTranscript.trim());
                     } else {
                         // Düşük güvenilirlikli sonuçları birleştir
-                        const combinedConfidence = alternatives
-                            .filter(alt => alt.confidence > 0.4)
-                            .reduce((acc, alt) => acc + alt.confidence * alt.transcript, '');
-                        
-                        if (combinedConfidence) {
-                            finalTranscript = combinedConfidence;
-                            await this.processCommand(finalTranscript.trim());
-                        }
-                    }
-                } else {
-                    const currentTime = Date.now();
-                    if (currentTime - lastProcessTime > 300) { // 300ms debounce
-                        interimTranscript = alternatives
-                            .filter(alt => alt.confidence > 0.4)
+                        const combinedTranscript = alternatives
+                            .filter(alt => alt.confidence > 0.2) // Daha düşük güvenilirlik
                             .map(alt => alt.transcript)
                             .join(' ');
                         
-                        this.updateStatus('interim', interimTranscript.trim());
-                        lastProcessTime = currentTime;
+                        if (combinedTranscript) {
+                            finalTranscript = combinedTranscript;
+                            await this.processCommand(finalTranscript.trim());
+                        } else {
+                            consecutiveErrors++;
+                            if (consecutiveErrors > 2) {
+                                this.restartRecognition();
+                            }
+                        }
                     }
                 }
             }
         };
 
+        // Hata yönetimi geliştirmeleri
         this.recognition.onerror = (event) => {
+            console.error('Recognition error:', event.error);
             if (event.error === 'no-speech' || event.error === 'audio-capture') {
                 this.restartRecognition();
             }
@@ -150,7 +167,14 @@ class VoiceAssistant {
 
         this.recognition.onend = () => {
             if (this.isListening && !this.isProcessing) {
-                this.restartRecognition();
+                setTimeout(() => {
+                    try {
+                        this.recognition.start();
+                    } catch (error) {
+                        console.error('Recognition restart error:', error);
+                        this.restartRecognition();
+                    }
+                }, 100);
             }
         };
     }
