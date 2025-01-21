@@ -253,46 +253,52 @@ class VoiceAssistant {
                 .trim();
             
             // API isteği
-            const response = await fetch('https://apilonic.netlify.app/api', {
+            const response = await fetch('https://apilonic.netlify.app/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept-Language': this.currentLanguage,
-                    'Cache-Control': 'no-cache'
+                    'Accept': 'application/json',
+                    'Accept-Language': this.currentLanguage
                 },
                 body: JSON.stringify({
-                    prompt: text,
-                    lang: this.currentLanguage,
-                    voice: this.voiceModel === 'elevenlabs' ? this.elevenLabsVoice : 'basic'
+                    message: text,
+                    language: this.currentLanguage,
+                    voice_type: this.voiceModel,
+                    voice_id: this.voiceModel === 'elevenlabs' ? this.elevenLabsVoice : 'basic'
                 })
             });
 
             if (!response.ok) {
-                throw new Error('API yanıt hatası: ' + response.status);
+                throw new Error(`API Hatası: ${response.status}`);
             }
 
             const data = await response.json();
             
-            if (data && data.response) {
+            if (data && data.message) {
                 // Yanıtı göster
-                this.responseDiv.textContent = data.response;
+                this.responseDiv.textContent = data.message;
                 
                 // Ses yanıtını çal
                 try {
                     if (this.voiceModel === 'elevenlabs') {
-                        await this.playElevenLabsAudio(data.response);
+                        await this.playElevenLabsAudio(data.message);
                     } else {
-                        await this.playBasicAudio(data.response);
+                        await this.playBasicAudio(data.message);
                     }
-                } catch (error) {
-                    console.error('Ses çalma hatası:', error);
-                    // Ses çalınamazsa en azından metin göster
+                } catch (audioError) {
+                    console.error('Ses çalma hatası:', audioError);
+                    // Ses hatası durumunda temel ses API'sini dene
+                    try {
+                        await this.playBasicAudio(data.message);
+                    } catch (fallbackError) {
+                        console.error('Yedek ses hatası:', fallbackError);
+                    }
                 }
                 
                 // Komut geçmişine ekle
                 this.commandHistory.unshift({
                     command: text,
-                    response: data.response,
+                    response: data.message,
                     timestamp: new Date().toISOString()
                 });
             } else {
@@ -305,7 +311,9 @@ class VoiceAssistant {
         } finally {
             this.isProcessing = false;
             if (this.isListening) {
-                this.restartRecognition();
+                setTimeout(() => {
+                    this.restartRecognition();
+                }, 1000);
             }
         }
     }
@@ -313,14 +321,14 @@ class VoiceAssistant {
     async playBasicAudio(text) {
         try {
             const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Standard-A' : 'en-US-Standard-B';
-            const url = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&lang=${this.currentLanguage}`;
+            const url = `https://apilonic.netlify.app/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&lang=${this.currentLanguage}`;
             
             const audio = new Audio(url);
             
             return new Promise((resolve, reject) => {
                 audio.oncanplaythrough = () => {
                     this.recordButton.classList.add('speaking');
-                    audio.play();
+                    audio.play().catch(reject);
                 };
                 
                 audio.onended = () => {
@@ -333,6 +341,13 @@ class VoiceAssistant {
                     this.recordButton.classList.remove('speaking');
                     reject(error);
                 };
+
+                // 5 saniye içinde ses yüklenemezse hata ver
+                setTimeout(() => {
+                    if (audio.readyState !== 4) {
+                        reject(new Error('Ses yükleme zaman aşımı'));
+                    }
+                }, 5000);
             });
         } catch (error) {
             console.error('Ses oluşturma hatası:', error);
