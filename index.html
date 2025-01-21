@@ -112,6 +112,31 @@
         <div class="particle"></div>
         <div class="particle"></div>
     </div>
+    <canvas id="visualizerCanvas" class="visualizer"></canvas>
+    <div class="shortcuts-info">
+        <div class="shortcut">
+            <kbd>Ctrl</kbd> + <kbd>M</kbd>
+            <span>Mikrofonu Aç/Kapat</span>
+        </div>
+        <div class="shortcut">
+            <kbd>Ctrl</kbd> + <kbd>H</kbd>
+            <span>Komut Geçmişi</span>
+        </div>
+    </div>
+    <div class="status-container">
+        <div class="status-icon"></div>
+        <div class="status-text"></div>
+        <div class="status-wave"></div>
+    </div>
     <script src="app.js"></script>
+    <!-- SVG Filtreler -->
+    <svg class="filters">
+        <defs>
+            <filter id="goo">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+            </filter>
+        </defs>
+    </svg>
 </body>
 </html> 

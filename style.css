@@ -8,7 +8,7 @@ body {
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    background: linear-gradient(-45deg, #1a1a1a, #2d3436, #0f2027, #203a43);
+    background: linear-gradient(45deg, #000000, #1a1a2e, #16213e, #0f3460);
     background-size: 400% 400%;
     animation: gradientBG 15s ease infinite;
     font-family: 'Poppins', sans-serif;
@@ -26,14 +26,29 @@ body {
     position: relative;
     z-index: 1;
     text-align: center;
-    padding: 40px 20px;
+    padding: 40px;
     max-width: 1200px;
     margin: 0 auto;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
+    background: rgba(13, 17, 23, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(79, 91, 147, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 0 60px rgba(79, 91, 147, 0.1);
     border-radius: 30px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.container::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, 
+        rgba(79, 91, 147, 0.1) 0%,
+        transparent 70%);
+    animation: holographic 10s linear infinite;
 }
 
 .voice-circle {
@@ -114,29 +129,42 @@ body {
 }
 
 @keyframes wave {
-    0% { 
-        transform: scale(1);
-        background: radial-gradient(circle, rgba(40,167,69,0.3) 0%, rgba(40,167,69,0) 70%);
+    0% {
+        transform: scale(0);
+        opacity: 1;
     }
-    50% { 
-        transform: scale(1.2);
-        background: radial-gradient(circle, rgba(40,167,69,0.2) 0%, rgba(40,167,69,0) 70%);
-    }
-    100% { 
+    100% {
         transform: scale(1);
-        background: radial-gradient(circle, rgba(40,167,69,0.3) 0%, rgba(40,167,69,0) 70%);
+        opacity: 0;
     }
 }
 
 #recordButton {
     width: 100px;
     height: 100px;
-    border-radius: 50%;
-    background: rgba(0, 123, 255, 0.8);
     border: none;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #1e2a4a, #0f1729);
+    box-shadow: 8px 8px 16px #0a0f1d,
+                -8px -8px 16px #243756;
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 0 30px rgba(0, 123, 255, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+#recordButton::before {
+    content: '';
+    position: absolute;
+    width: 150%;
+    height: 150%;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0%,
+        rgba(79, 91, 147, 0.2) 50%,
+        transparent 100%
+    );
+    animation: rotate 4s linear infinite;
 }
 
 #recordButton:hover {
@@ -172,68 +200,38 @@ body {
 
 .wave-container {
     position: absolute;
-    width: 300%;
-    height: 300%;
-    top: -100%;
-    left: -100%;
+    width: 200%;
+    height: 200%;
+    top: -50%;
+    left: -50%;
     pointer-events: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
 }
 
 .wave {
     position: absolute;
+    border: 2px solid rgba(79, 91, 147, 0.3);
     border-radius: 50%;
-    border: 2px solid rgba(40,167,69,0.2);
     width: 100%;
     height: 100%;
-    opacity: 0;
-    transform: scale(1);
-    transition: all 0.3s ease;
-    border-width: 3px;
-    filter: drop-shadow(0 0 10px rgba(40,167,69,0.3));
-}
-
-.wave:nth-child(1) {
-    border-color: rgba(40,167,69,0.3);
+    animation: wave 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .wave:nth-child(2) {
-    border-color: rgba(40,167,69,0.2);
+    animation-delay: 0.5s;
+    border-color: rgba(0, 123, 255, 0.3);
 }
 
 .wave:nth-child(3) {
-    border-color: rgba(40,167,69,0.1);
-}
-
-#recordButton.speaking {
-    background: #28a745;
-    animation: glow 1.5s ease-in-out infinite;
-}
-
-@keyframes glow {
-    0% {
-        box-shadow: 0 0 5px rgba(40,167,69,0.5);
-    }
-    50% {
-        box-shadow: 0 0 20px rgba(40,167,69,0.8);
-    }
-    100% {
-        box-shadow: 0 0 5px rgba(40,167,69,0.5);
-    }
+    animation-delay: 1s;
+    border-color: rgba(40, 167, 69, 0.3);
 }
 
 .status {
-    font-size: 20px;
-    font-weight: 500;
+    font-size: 18px;
+    color: #4f5b93;
+    text-shadow: 0 0 10px rgba(79, 91, 147, 0.5);
     margin: 20px 0;
-    padding: 15px 30px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    backdrop-filter: blur(5px);
-    display: inline-block;
-    transition: all 0.3s ease;
+    font-weight: 500;
 }
 
 .status.interim {
@@ -243,16 +241,16 @@ body {
 
 .response {
     position: relative;
-    background: rgba(255, 255, 255, 0.08);
-    padding: 30px;
-    border-radius: 20px;
+    background: rgba(13, 17, 23, 0.5);
+    padding: 20px;
+    border-radius: 15px;
     margin-top: 30px;
     min-height: 120px;
-    line-height: 1.8;
-    font-size: 18px;
+    line-height: 1.6;
+    font-size: 16px;
     transition: all 0.3s ease;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 20px rgba(79, 91, 147, 0.1);
+    border: 1px solid rgba(79, 91, 147, 0.2);
 }
 
 .mic-icon {
@@ -474,20 +472,20 @@ body {
 /* Ses seviyesi göstergesi için ek stiller */
 .voice-level {
     position: absolute;
-    bottom: -30px;
+    bottom: -40px;
     left: 50%;
     transform: translateX(-50%);
-    width: 100px;
-    height: 3px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 3px;
+    width: 200px;
+    height: 4px;
+    background: rgba(13, 17, 23, 0.5);
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .voice-level-inner {
     height: 100%;
-    width: 0%;
-    background: #28a745;
+    background: linear-gradient(90deg, #4f5b93, #00ff9d);
+    box-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
     transition: width 0.1s ease;
 }
 
@@ -510,32 +508,41 @@ body {
 /* Arka plan partikülleri */
 .particles {
     position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     z-index: 0;
-    pointer-events: none;
 }
 
 .particle {
     position: absolute;
-    background: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(45deg, rgba(79, 91, 147, 0.3), rgba(0, 123, 255, 0.3));
     border-radius: 50%;
-    animation: float 20s infinite;
+    filter: blur(1px);
+    animation: particleFloat 20s infinite;
 }
 
-@keyframes float {
-    0% { transform: translateY(0) translateX(0); }
-    50% { transform: translateY(-100px) translateX(100px); }
-    100% { transform: translateY(0) translateX(0); }
+@keyframes holographic {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes particleFloat {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(100px, -100px); }
+    50% { transform: translate(200px, 0); }
+    75% { transform: translate(100px, 100px); }
 }
 
 /* Responsive düzenlemeler */
 @media (max-width: 768px) {
     .container {
+        margin: 10px;
         padding: 20px;
-        margin: 20px;
     }
 
     .voice-circle {
@@ -548,13 +555,207 @@ body {
         height: 80px;
     }
 
-    .status {
-        font-size: 16px;
-        padding: 10px 20px;
+    .voice-level {
+        width: 150px;
+    }
+}
+
+/* Ses görselleştirici için stiller */
+.visualizer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 200px;
+    opacity: 0.8;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Kısayol bilgisi için stiller */
+.shortcuts-info {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(13, 17, 23, 0.8);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(79, 91, 147, 0.2);
+    z-index: 100;
+}
+
+.shortcut {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+}
+
+kbd {
+    background: rgba(79, 91, 147, 0.3);
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin: 0 5px;
+    font-family: monospace;
+}
+
+/* Komut geçmişi modal */
+.history-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+}
+
+.history-modal.active {
+    opacity: 1;
+}
+
+.history-content {
+    background: rgba(13, 17, 23, 0.95);
+    padding: 30px;
+    border-radius: 15px;
+    border: 1px solid rgba(79, 91, 147, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.history-content h3 {
+    margin-bottom: 20px;
+    color: #4f5b93;
+}
+
+.history-content ul {
+    list-style: none;
+}
+
+.history-content li {
+    padding: 10px;
+    border-bottom: 1px solid rgba(79, 91, 147, 0.2);
+    color: #e1e1e1;
+}
+
+/* Yeni tema seçici */
+.theme-selector {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.theme-button {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-button:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 20px currentColor;
+}
+
+/* Gelişmiş animasyonlar */
+@keyframes glitch {
+    0% {
+        transform: translate(0);
+    }
+    20% {
+        transform: translate(-2px, 2px);
+    }
+    40% {
+        transform: translate(-2px, -2px);
+    }
+    60% {
+        transform: translate(2px, 2px);
+    }
+    80% {
+        transform: translate(2px, -2px);
+    }
+    100% {
+        transform: translate(0);
+    }
+}
+
+/* Tutorial stilleri */
+.tutorial {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.tutorial-step {
+    background: rgba(13, 17, 23, 0.95);
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid var(--primary-color);
+    max-width: 400px;
+    position: relative;
+}
+
+/* Gelişmiş mikrofon efektleri */
+#recordButton {
+    position: relative;
+    overflow: hidden;
+}
+
+#recordButton::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent 30%
+    );
+    animation: rotate 4s linear infinite;
+}
+
+/* Gelişmiş dalga animasyonları */
+.wave {
+    filter: url(#goo);
+    opacity: 0.8;
+}
+
+/* SVG filtreler */
+.filters {
+    position: absolute;
+    visibility: hidden;
+}
+
+/* Mobil optimizasyonları */
+@media (max-width: 768px) {
+    .theme-selector {
+        top: auto;
+        bottom: 20px;
+        right: 20px;
     }
 
-    .response {
-        font-size: 16px;
-        padding: 20px;
+    .tutorial-step {
+        width: 90%;
+        margin: 20px;
     }
 } 

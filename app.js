@@ -29,6 +29,21 @@ class VoiceAssistant {
         this.smoothingTimeConstant = 0.95; // Daha yumuşak geçişler
         this.transcriptBuffer = []; // Metin tamponu ekledik
         this.setupAdvancedRecognition();
+        this.visualizer = null;
+        this.visualizerCanvas = document.getElementById('visualizerCanvas');
+        this.visualizerCtx = this.visualizerCanvas.getContext('2d');
+        this.setupVisualizer();
+        this.commandHistory = [];
+        this.maxHistorySize = 10;
+        this.lastResponseTime = 0;
+        this.responseDelay = 500;
+        this.setupKeyboardShortcuts();
+        this.setupGestures();
+        this.setupThemes();
+        this.setupVoiceCommands();
+        this.setupNotifications();
+        this.setupTutorial();
+        this.setupOfflineSupport();
     }
 
     initAudioContext() {
@@ -230,6 +245,16 @@ class VoiceAssistant {
         try {
             this.isProcessing = true;
             this.updateStatus('processing');
+            
+            // Komut geçmişine ekle
+            this.commandHistory.unshift({
+                command: text,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (this.commandHistory.length > this.maxHistorySize) {
+                this.commandHistory.pop();
+            }
             
             // Gelişmiş metin normalizasyonu
             text = text
@@ -520,6 +545,184 @@ class VoiceAssistant {
                 this.statusDiv.textContent = this.currentLanguage === 'tr-TR' ? 
                     'Başlamak için mikrofona tıklayın' : 
                     'Click microphone to start';
+        }
+    }
+
+    setupVisualizer() {
+        this.visualizerCanvas.width = window.innerWidth;
+        this.visualizerCanvas.height = 200;
+        
+        const drawVisualizer = () => {
+            requestAnimationFrame(drawVisualizer);
+            
+            const bufferLength = this.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            this.analyser.getByteFrequencyData(dataArray);
+            
+            this.visualizerCtx.fillStyle = 'rgba(13, 17, 23, 0.2)';
+            this.visualizerCtx.fillRect(0, 0, this.visualizerCanvas.width, this.visualizerCanvas.height);
+            
+            const barWidth = (this.visualizerCanvas.width / bufferLength) * 2.5;
+            let barHeight;
+            let x = 0;
+            
+            for(let i = 0; i < bufferLength; i++) {
+                barHeight = dataArray[i] / 2;
+                
+                const gradient = this.visualizerCtx.createLinearGradient(0, 0, 0, this.visualizerCanvas.height);
+                gradient.addColorStop(0, '#4f5b93');
+                gradient.addColorStop(1, '#00ff9d');
+                
+                this.visualizerCtx.fillStyle = gradient;
+                this.visualizerCtx.fillRect(x, this.visualizerCanvas.height - barHeight, barWidth, barHeight);
+                
+                x += barWidth + 1;
+            }
+        };
+        
+        drawVisualizer();
+    }
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'm') {
+                this.toggleListening();
+            }
+            if (e.ctrlKey && e.key === 'h') {
+                this.showCommandHistory();
+            }
+        });
+    }
+
+    setupGestures() {
+        let touchStartY = 0;
+        
+        document.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            const touchEndY = e.touches[0].clientY;
+            const diff = touchStartY - touchEndY;
+            
+            if (Math.abs(diff) > 100) {
+                if (diff > 0) {
+                    this.startListening();
+                } else {
+                    this.stopListening();
+                }
+            }
+        });
+    }
+
+    showCommandHistory() {
+        const historyModal = document.createElement('div');
+        historyModal.className = 'history-modal';
+        
+        const content = document.createElement('div');
+        content.className = 'history-content';
+        
+        const title = document.createElement('h3');
+        title.textContent = 'Komut Geçmişi';
+        content.appendChild(title);
+        
+        const list = document.createElement('ul');
+        this.commandHistory.forEach(item => {
+            const li = document.createElement('li');
+            const time = new Date(item.timestamp).toLocaleTimeString();
+            li.textContent = `${time}: ${item.command}`;
+            list.appendChild(li);
+        });
+        
+        content.appendChild(list);
+        historyModal.appendChild(content);
+        document.body.appendChild(historyModal);
+        
+        setTimeout(() => {
+            historyModal.classList.add('active');
+        }, 10);
+        
+        historyModal.addEventListener('click', () => {
+            historyModal.classList.remove('active');
+            setTimeout(() => {
+                historyModal.remove();
+            }, 300);
+        });
+    }
+
+    setupThemes() {
+        const themes = {
+            cyber: {
+                primary: '#00ff9d',
+                secondary: '#4f5b93',
+                background: 'linear-gradient(45deg, #000000, #1a1a2e, #16213e, #0f3460)'
+            },
+            neon: {
+                primary: '#ff00ff',
+                secondary: '#00ffff',
+                background: 'linear-gradient(45deg, #000000, #1a002e, #16003e, #0f0060)'
+            },
+            matrix: {
+                primary: '#00ff00',
+                secondary: '#003300',
+                background: 'linear-gradient(45deg, #000000, #001100, #002200, #003300)'
+            }
+        };
+
+        const themeSelector = document.createElement('div');
+        themeSelector.className = 'theme-selector';
+        Object.keys(themes).forEach(theme => {
+            const button = document.createElement('button');
+            button.className = `theme-button ${theme}`;
+            button.onclick = () => this.applyTheme(themes[theme]);
+            themeSelector.appendChild(button);
+        });
+        document.body.appendChild(themeSelector);
+    }
+
+    setupVoiceCommands() {
+        this.commands = {
+            'tema değiştir': () => this.showThemeSelector(),
+            'geçmişi göster': () => this.showCommandHistory(),
+            'yardım': () => this.showTutorial(),
+            'temizle': () => this.clearHistory(),
+            'ses seviyesi': (level) => this.adjustVolume(level)
+        };
+    }
+
+    setupNotifications() {
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+    }
+
+    setupTutorial() {
+        const steps = [
+            {
+                element: '#recordButton',
+                title: 'Mikrofon',
+                content: 'Konuşmaya başlamak için tıklayın'
+            },
+            {
+                element: '.voice-level',
+                title: 'Ses Seviyesi',
+                content: 'Sesinizin şiddetini gösterir'
+            },
+            {
+                element: '.visualizer',
+                title: 'Ses Görselleştirici',
+                content: 'Sesinizin frekans analizi'
+            }
+        ];
+
+        const tutorial = document.createElement('div');
+        tutorial.className = 'tutorial';
+        // Tutorial adımları...
+    }
+
+    setupOfflineSupport() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
         }
     }
 }
