@@ -157,21 +157,21 @@ class VoiceAssistant {
                             .map(alt => alt.transcript.trim())
                             .join(' ');
                             
-                        // Metin tamponuna ekle
-                        this.transcriptBuffer.push(finalTranscript);
-                        
-                        // Son 3 algılamayı birleştir
-                        if (this.transcriptBuffer.length >= 3) {
-                            const combinedText = this.transcriptBuffer
-                                .slice(-3)
-                                .join(' ')
-                                .toLowerCase()
-                                .replace(/\s+/g, ' ')
-                                .trim();
-                                
-                            await this.processCommand(combinedText);
-                            this.transcriptBuffer = []; // Tamponu temizle
-                        }
+                            // Metin tamponuna ekle
+                            this.transcriptBuffer.push(finalTranscript);
+                            
+                            // Son 3 algılamayı birleştir
+                            if (this.transcriptBuffer.length >= 3) {
+                                const combinedText = this.transcriptBuffer
+                                    .slice(-3)
+                                    .join(' ')
+                                    .toLowerCase()
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+                                    
+                                await this.processCommand(combinedText);
+                                this.transcriptBuffer = []; // Tamponu temizle
+                            }
                     }
                 } else {
                     interimTranscript = alternatives[0].transcript;
@@ -246,47 +246,62 @@ class VoiceAssistant {
             this.isProcessing = true;
             this.updateStatus('processing');
             
-            // Komut geçmişine ekle
-            this.commandHistory.unshift({
-                command: text,
-                timestamp: new Date().toISOString()
-            });
-            
-            if (this.commandHistory.length > this.maxHistorySize) {
-                this.commandHistory.pop();
-            }
-            
-            // Gelişmiş metin normalizasyonu
-            text = text
-                .toLowerCase()
+            // Metin ön işleme
+            text = text.toLowerCase()
                 .replace(/[.,!?]/g, '')
                 .replace(/\s+/g, ' ')
-                .replace(/[^a-zğüşıöçİĞÜŞÖÇ\s]/g, '') // Türkçe karakterleri koru
                 .trim();
             
-            if (text.length < 2) return; // Çok kısa metinleri atla
-            
-            const response = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${this.currentLanguage}`, {
-                method: 'GET',
+            // API isteği
+            const response = await fetch('https://apilonic.netlify.app/api', {
+                method: 'POST',
                 headers: {
+                    'Content-Type': 'application/json',
                     'Accept-Language': this.currentLanguage,
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                    'Pragma': 'no-cache'
-                }
+                    'Cache-Control': 'no-cache'
+                },
+                body: JSON.stringify({
+                    prompt: text,
+                    lang: this.currentLanguage,
+                    voice: this.voiceModel === 'elevenlabs' ? this.elevenLabsVoice : 'basic'
+                })
             });
 
-            if (!response.ok) throw new Error('API yanıt vermedi');
+            if (!response.ok) {
+                throw new Error('API yanıt hatası: ' + response.status);
+            }
 
             const data = await response.json();
             
-            if (data.success) {
+            if (data && data.response) {
+                // Yanıtı göster
                 this.responseDiv.textContent = data.response;
-                await this.playResponse(data.response);
+                
+                // Ses yanıtını çal
+                try {
+                    if (this.voiceModel === 'elevenlabs') {
+                        await this.playElevenLabsAudio(data.response);
+                    } else {
+                        await this.playBasicAudio(data.response);
+                    }
+                } catch (error) {
+                    console.error('Ses çalma hatası:', error);
+                    // Ses çalınamazsa en azından metin göster
+                }
+                
+                // Komut geçmişine ekle
+                this.commandHistory.unshift({
+                    command: text,
+                    response: data.response,
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                throw new Error('Geçersiz API yanıtı');
             }
         } catch (error) {
             console.error('İşleme hatası:', error);
             this.updateStatus('error');
+            this.responseDiv.textContent = 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.';
         } finally {
             this.isProcessing = false;
             if (this.isListening) {
@@ -296,63 +311,80 @@ class VoiceAssistant {
     }
 
     async playBasicAudio(text) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const voice = 'tr-TR-Wavenet-E'; // Sabit Türkçe ses
-                const voiceUrl = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&speed=1.2&pitch=1&volume=1.2&lang=tr-TR`;
-                
-                const audio = new Audio(voiceUrl);
-                
-                // Ses yüklenirken beklemeden devam et
+        try {
+            const voice = this.currentLanguage === 'tr-TR' ? 'tr-TR-Standard-A' : 'en-US-Standard-B';
+            const url = `https://tssvoice.istebutolga.workers.dev/?message=${encodeURIComponent(text)}&voice=${voice}&lang=${this.currentLanguage}`;
+            
+            const audio = new Audio(url);
+            
+            return new Promise((resolve, reject) => {
                 audio.oncanplaythrough = () => {
                     this.recordButton.classList.add('speaking');
-                    audio.play().catch(reject);
+                    audio.play();
                 };
-
+                
                 audio.onended = () => {
                     this.recordButton.classList.remove('speaking');
                     resolve();
                 };
-
-                audio.onerror = reject;
-            } catch (error) {
-                reject(error);
-            }
-        });
+                
+                audio.onerror = (error) => {
+                    console.error('Ses çalma hatası:', error);
+                    this.recordButton.classList.remove('speaking');
+                    reject(error);
+                };
+            });
+        } catch (error) {
+            console.error('Ses oluşturma hatası:', error);
+            throw error;
+        }
     }
 
     async playElevenLabsAudio(text) {
         try {
-            this.updateStatus('processing');
-
-            const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${this.elevenLabsVoice}`, {
+            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + this.elevenLabsVoice, {
                 method: 'POST',
                 headers: {
-                    'Accept': 'audio/mpeg',
                     'Content-Type': 'application/json',
                     'xi-api-key': this.elevenLabsApiKey
                 },
                 body: JSON.stringify({
                     text: text,
-                    model_id: 'eleven_multilingual_v2',
                     voice_settings: {
                         stability: 0.5,
-                        similarity_boost: 0.75
+                        similarity_boost: 0.8
                     }
                 })
             });
 
-            if (!response.ok) throw new Error('ElevenLabs API error');
+            if (!response.ok) {
+                throw new Error('ElevenLabs API hatası');
+            }
 
             const audioBlob = await response.blob();
-            const audio = new Audio(URL.createObjectURL(audioBlob));
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
             
-            await this.playAudio(audio);
-
+            return new Promise((resolve, reject) => {
+                audio.oncanplaythrough = () => {
+                    this.recordButton.classList.add('speaking');
+                    audio.play();
+                };
+                
+                audio.onended = () => {
+                    this.recordButton.classList.remove('speaking');
+                    URL.revokeObjectURL(audioUrl);
+                    resolve();
+                };
+                
+                audio.onerror = (error) => {
+                    URL.revokeObjectURL(audioUrl);
+                    reject(error);
+                };
+            });
         } catch (error) {
-            console.error('ElevenLabs Error:', error);
-            // Hata durumunda temel ses API'sine geri dön
-            await this.playBasicAudio(text);
+            console.error('ElevenLabs ses hatası:', error);
+            throw error;
         }
     }
 
@@ -630,7 +662,7 @@ class VoiceAssistant {
         this.commandHistory.forEach(item => {
             const li = document.createElement('li');
             const time = new Date(item.timestamp).toLocaleTimeString();
-            li.textContent = `${time}: ${item.command}`;
+            li.textContent = `${time}: ${item.command} - ${item.response}`;
             list.appendChild(li);
         });
         
