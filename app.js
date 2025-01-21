@@ -20,13 +20,14 @@ class VoiceAssistant {
         this.lastProcessedText = '';
         this.processingTimeout = null;
         this.initParticles();
-        this.confidenceThreshold = 0.3; // Eşik değerini daha da düşürdük
+        this.confidenceThreshold = 0.2; // Daha da düşürdük
         this.retryAttempts = 3; // Yeniden deneme sayısı
-        this.noiseThreshold = -65; // Gürültü eşiğini düşürdük
-        this.bufferSize = 4096; // Buffer boyutunu artırdık
-        this.minDecibels = -90;
-        this.maxDecibels = -10;
-        this.smoothingTimeConstant = 0.85;
+        this.noiseThreshold = -70; // Daha hassas gürültü eşiği
+        this.bufferSize = 8192; // Buffer boyutunu iki katına çıkardık
+        this.minDecibels = -95; // Daha hassas minimum ses seviyesi
+        this.maxDecibels = -5; // Daha yüksek maksimum ses seviyesi
+        this.smoothingTimeConstant = 0.95; // Daha yumuşak geçişler
+        this.transcriptBuffer = []; // Metin tamponu ekledik
         this.setupAdvancedRecognition();
     }
 
@@ -44,7 +45,7 @@ class VoiceAssistant {
     setupAdvancedRecognition() {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.maxAlternatives = 10; // Alternatif sayısını artırdık
+        this.recognition.maxAlternatives = 15; // Daha fazla alternatif
         this.recognition.lang = 'tr-TR';
 
         // Gelişmiş ses ayarları
@@ -118,63 +119,63 @@ class VoiceAssistant {
     }
 
     setupRecognition() {
-        let transcriptBuffer = '';
-        let lastProcessTime = Date.now();
-        let consecutiveErrors = 0;
-
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.maxAlternatives = 15; // Daha fazla alternatif
+        
         this.recognition.onresult = async (event) => {
-            let finalTranscript = '';
             let interimTranscript = '';
+            let finalTranscript = '';
             
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
                 const alternatives = Array.from(result).sort((a, b) => b.confidence - a.confidence);
                 
                 if (result.isFinal) {
-                    const bestResult = alternatives[0];
-                    if (bestResult.confidence > 0.4) { // Güvenilirlik eşiğini düşürdük
-                        finalTranscript = bestResult.transcript;
-                        consecutiveErrors = 0; // Başarılı algılama durumunda sıfırla
-                        await this.processCommand(finalTranscript.trim());
-                    } else {
-                        // Düşük güvenilirlikli sonuçları birleştir
-                        const combinedTranscript = alternatives
-                            .filter(alt => alt.confidence > 0.2) // Daha düşük güvenilirlik
-                            .map(alt => alt.transcript)
+                    // Tüm alternatifleri değerlendir
+                    const validAlternatives = alternatives.filter(alt => alt.confidence > 0.15);
+                    
+                    if (validAlternatives.length > 0) {
+                        // En iyi sonuçları birleştir
+                        finalTranscript = validAlternatives
+                            .slice(0, 3) // En iyi 3 alternatifi al
+                            .map(alt => alt.transcript.trim())
                             .join(' ');
+                            
+                        // Metin tamponuna ekle
+                        this.transcriptBuffer.push(finalTranscript);
                         
-                        if (combinedTranscript) {
-                            finalTranscript = combinedTranscript;
-                            await this.processCommand(finalTranscript.trim());
-                        } else {
-                            consecutiveErrors++;
-                            if (consecutiveErrors > 2) {
-                                this.restartRecognition();
-                            }
+                        // Son 3 algılamayı birleştir
+                        if (this.transcriptBuffer.length >= 3) {
+                            const combinedText = this.transcriptBuffer
+                                .slice(-3)
+                                .join(' ')
+                                .toLowerCase()
+                                .replace(/\s+/g, ' ')
+                                .trim();
+                                
+                            await this.processCommand(combinedText);
+                            this.transcriptBuffer = []; // Tamponu temizle
                         }
                     }
+                } else {
+                    interimTranscript = alternatives[0].transcript;
+                    this.updateStatus('interim', interimTranscript);
                 }
             }
         };
 
-        // Hata yönetimi geliştirmeleri
+        // Gelişmiş hata yönetimi
         this.recognition.onerror = (event) => {
             console.error('Recognition error:', event.error);
             if (event.error === 'no-speech' || event.error === 'audio-capture') {
-                this.restartRecognition();
+                setTimeout(() => this.restartRecognition(), 100);
             }
         };
 
         this.recognition.onend = () => {
             if (this.isListening && !this.isProcessing) {
-                setTimeout(() => {
-                    try {
-                        this.recognition.start();
-                    } catch (error) {
-                        console.error('Recognition restart error:', error);
-                        this.restartRecognition();
-                    }
-                }, 100);
+                setTimeout(() => this.restartRecognition(), 50);
             }
         };
     }
@@ -230,24 +231,23 @@ class VoiceAssistant {
             this.isProcessing = true;
             this.updateStatus('processing');
             
-            // Metin ön işleme ve normalizasyon
-            text = text.toLowerCase()
+            // Gelişmiş metin normalizasyonu
+            text = text
+                .toLowerCase()
                 .replace(/[.,!?]/g, '')
                 .replace(/\s+/g, ' ')
+                .replace(/[^a-zğüşıöçİĞÜŞÖÇ\s]/g, '') // Türkçe karakterleri koru
                 .trim();
             
-            // Hızlı yanıt için önbellek kontrolü
-            if (this.responseCache && this.responseCache[text]) {
-                this.handleResponse(this.responseCache[text]);
-                return;
-            }
-
+            if (text.length < 2) return; // Çok kısa metinleri atla
+            
             const response = await fetch(`https://apilonic.netlify.app/api?prompt=${encodeURIComponent(text)}&lang=${this.currentLanguage}`, {
                 method: 'GET',
                 headers: {
                     'Accept-Language': this.currentLanguage,
                     'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive'
+                    'Connection': 'keep-alive',
+                    'Pragma': 'no-cache'
                 }
             });
 
@@ -256,11 +256,8 @@ class VoiceAssistant {
             const data = await response.json();
             
             if (data.success) {
-                // Yanıtı önbelleğe al
-                if (!this.responseCache) this.responseCache = {};
-                this.responseCache[text] = data.response;
-                
-                await this.handleResponse(data.response);
+                this.responseDiv.textContent = data.response;
+                await this.playResponse(data.response);
             }
         } catch (error) {
             console.error('İşleme hatası:', error);
